@@ -6,18 +6,37 @@
     android:orientation="vertical"
     android:background="#121212">
 
-    <TextView
-        android:id="@+id/title"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Apps"
-        android:textColor="#FFFFFF"
-        android:textSize="28sp"
-        android:fontFamily="sans-serif-medium"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingStart="20dp"
-        android:paddingEnd="20dp"
+        android:paddingEnd="12dp"
         android:paddingTop="40dp"
-        android:paddingBottom="12dp" />
+        android:paddingBottom="12dp">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Apps"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <ImageView
+            android:id="@+id/toggle_view"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_view_list"
+            android:tint="#AAAAAA"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Toggle view mode" />
+
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progress"

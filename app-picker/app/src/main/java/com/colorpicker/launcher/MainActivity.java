@@ -2,22 +2,20 @@ package com.colorpicker.launcher;
 
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/**
- * Main launcher activity that displays installed apps sorted by their
- * icon's dominant color in rainbow order, grouped by color sections.
- */
 public class MainActivity extends AppCompatActivity {
 
     private static final int GRID_COLUMNS = 4;
 
     private RecyclerView appGrid;
     private ProgressBar progress;
+    private ImageView toggleView;
     private AppAdapter adapter;
 
     @Override
@@ -27,11 +25,11 @@ public class MainActivity extends AppCompatActivity {
 
         appGrid = findViewById(R.id.app_grid);
         progress = findViewById(R.id.progress);
+        toggleView = findViewById(R.id.toggle_view);
 
         adapter = new AppAdapter(this);
 
         GridLayoutManager layoutManager = new GridLayoutManager(this, GRID_COLUMNS);
-        // Make header items span the full width
         layoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override
             public int getSpanSize(int position) {
@@ -42,13 +40,18 @@ public class MainActivity extends AppCompatActivity {
         appGrid.setLayoutManager(layoutManager);
         appGrid.setAdapter(adapter);
 
+        updateToggleIcon();
+        toggleView.setOnClickListener(v -> {
+            adapter.setShowHeaders(!adapter.getShowHeaders());
+            updateToggleIcon();
+        });
+
         loadApps();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // Reload when returning to launcher in case apps were installed/removed
         loadApps();
     }
 
@@ -61,5 +64,15 @@ public class MainActivity extends AppCompatActivity {
             progress.setVisibility(View.GONE);
             appGrid.setVisibility(View.VISIBLE);
         });
+    }
+
+    private void updateToggleIcon() {
+        if (adapter.getShowHeaders()) {
+            // Currently grouped — show list icon to switch to flat
+            toggleView.setImageResource(R.drawable.ic_view_list);
+        } else {
+            // Currently flat — show grid icon to switch to grouped
+            toggleView.setImageResource(R.drawable.ic_view_grouped);
+        }
     }
 }

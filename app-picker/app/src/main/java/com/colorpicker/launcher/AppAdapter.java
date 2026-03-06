@@ -33,20 +33,43 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.context = context;
     }
 
-    public void setApps(List<AppInfo> apps) {
-        items.clear();
-        int currentGroup = -1;
+    private List<AppInfo> currentApps = new ArrayList<>();
+    private boolean showHeaders = true;
 
-        for (AppInfo app : apps) {
-            int group = ColorUtils.colorGroupIndex(
-                    app.getHue(), app.getSaturation(), app.getBrightness());
-            if (group != currentGroup) {
-                currentGroup = group;
-                items.add(new HeaderItem(
-                        ColorUtils.colorGroupName(group),
-                        ColorUtils.colorGroupAccent(group)));
+    public void setApps(List<AppInfo> apps) {
+        currentApps = new ArrayList<>(apps);
+        rebuildItems();
+    }
+
+    public void setShowHeaders(boolean show) {
+        if (showHeaders != show) {
+            showHeaders = show;
+            rebuildItems();
+        }
+    }
+
+    public boolean getShowHeaders() {
+        return showHeaders;
+    }
+
+    private void rebuildItems() {
+        items.clear();
+
+        if (showHeaders) {
+            int currentGroup = -1;
+            for (AppInfo app : currentApps) {
+                int group = ColorUtils.colorGroupIndex(
+                        app.getHue(), app.getSaturation(), app.getBrightness());
+                if (group != currentGroup) {
+                    currentGroup = group;
+                    items.add(new HeaderItem(
+                            ColorUtils.colorGroupName(group),
+                            ColorUtils.colorGroupAccent(group)));
+                }
+                items.add(app);
             }
-            items.add(app);
+        } else {
+            items.addAll(currentApps);
         }
 
         notifyDataSetChanged();
