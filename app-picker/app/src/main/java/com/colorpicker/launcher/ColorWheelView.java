@@ -1,6 +1,5 @@
 package com.colorpicker.launcher;
 
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -12,7 +11,6 @@ import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.animation.DecelerateInterpolator;
 
 import androidx.annotation.Nullable;
 
@@ -21,17 +19,15 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A two-level color explorer that fills the screen.
- *
- * <p><b>Level 1</b> is a mosaic of color <i>regions</i> — one tile per color group, in rainbow
- * order, sized by how many apps it holds. <b>Tap a region</b> to <b>subselect</b>: the view drills
- * into that color and lays its apps out as their own screen-filling mosaic, each tappable to launch.
- * Tapping the background (or Back) returns to the regions.
+ * A screen-filling mosaic of color <i>regions</i> — one tile per color group, in rainbow order,
+ * sized by how many apps it holds. Each tile shows a small color name in the corner and fills the
+ * rest of itself with the actual app icons in that color. Tapping a region notifies the host, which
+ * opens those apps as a normal scrollable list.
  */
 public class ColorWheelView extends View {
 
-    public interface OnAppClickListener {
-        void onAppClick(AppInfo app);
+    public interface OnRegionClickListener {
+        void onRegionClick(int group, String name, int color, List<AppInfo> apps);
     }
 
     /** Region order: rainbow (red..pink), then the multi-color group, then neutrals. */
@@ -40,73 +36,51 @@ public class ColorWheelView extends View {
     private static class Tile {
         final RectF rect;
         final int color;
-        @Nullable final AppInfo app;     // set for app tiles
-        final int group;                 // set for region tiles
-        final String label;
-        final int count;
-        @Nullable final List<AppInfo> samples; // representative icons, for region tiles
-        Tile(RectF rect, int color, @Nullable AppInfo app, int group, String label, int count,
-             @Nullable List<AppInfo> samples) {
-            this.rect = rect; this.color = color; this.app = app; this.group = group;
-            this.label = label; this.count = count; this.samples = samples;
+        final int group;
+        final String name;
+        final List<AppInfo> apps;
+        Tile(RectF rect, int color, int group, String name, List<AppInfo> apps) {
+            this.rect = rect; this.color = color; this.group = group; this.name = name; this.apps = apps;
         }
     }
 
-    private final List<AppInfo> apps = new ArrayList<>();
     private final List<List<AppInfo>> groupApps = new ArrayList<>();
     private final List<Integer> groupIds = new ArrayList<>();
-
-    private final List<Tile> regionTiles = new ArrayList<>();
-    private final List<Tile> appTiles = new ArrayList<>();
-
-    private int selectedGroup = -1;       // index into groupApps, -1 == regions
-    private float progress = 0f;          // 0 = regions, 1 = subselection
-    @Nullable private ValueAnimator animator;
+    private final List<Tile> tiles = new ArrayList<>();
 
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    @Nullable private OnAppClickListener listener;
+    @Nullable private OnRegionClickListener listener;
 
     public ColorWheelView(Context context) { super(context); init(); }
     public ColorWheelView(Context context, AttributeSet attrs) { super(context, attrs); init(); }
 
     private void init() {
-        textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setFakeBoldText(true);
+        textPaint.setTextAlign(Paint.Align.LEFT);
     }
 
-    public void setOnAppClickListener(OnAppClickListener l) { this.listener = l; }
+    public void setOnRegionClickListener(OnRegionClickListener l) { this.listener = l; }
 
     public void setApps(List<AppInfo> all) {
-        apps.clear();
-        apps.addAll(all);
-        regionTiles.clear();
-        appTiles.clear();
-        selectedGroup = -1;
-        progress = 0f;
         groupApps.clear();
         groupIds.clear();
+        tiles.clear();
 
         List<List<AppInfo>> buckets = new ArrayList<>();
         for (int i = 0; i < ColorUtils.COLOR_GROUP_COUNT; i++) buckets.add(new ArrayList<>());
-        for (AppInfo a : all) {
-            buckets.get(ColorUtils.colorGroupIndex(a)).add(a);
-        }
+        for (AppInfo a : all) buckets.get(ColorUtils.colorGroupIndex(a)).add(a);
         for (int g : ORDER) {
             if (buckets.get(g).isEmpty()) continue;
             List<AppInfo> list = buckets.get(g);
-            Collections.sort(list, (a, b) -> Float.compare(a.getHue(), b.getHue()));
+            Collections.sort(list, (a, b) -> Long.compare(b.getUsageScore(), a.getUsageScore()));
             groupApps.add(list);
             groupIds.add(g);
         }
         invalidate();
     }
 
-    /** Back: if subselected, return to regions. */
-    public boolean popFocus() {
-        if (progress > 0.01f || selectedGroup != -1) { animateTo(0f); return true; }
-        return false;
-    }
+    public boolean popFocus() { return false; }
 
     private float dp(float v) { return v * getResources().getDisplayMetrics().density; }
 
@@ -114,17 +88,12 @@ public class ColorWheelView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         int w = getWidth(), h = getHeight();
-        if (w == 0 || h == 0 || apps.isEmpty()) return;
+        if (w == 0 || h == 0 || groupApps.isEmpty()) return;
         canvas.drawColor(0xFF0E0E0E);
-        if (regionTiles.isEmpty()) layoutRegions(w, h);
+        if (tiles.isEmpty()) layout(w, h);
 
-        if (progress < 0.999f) drawTiles(canvas, regionTiles, (int) (255 * (1f - progress)), true);
-        if (selectedGroup != -1 && progress > 0.001f) drawTiles(canvas, appTiles, (int) (255 * progress), false);
-    }
-
-    private void drawTiles(Canvas canvas, List<Tile> tiles, int alpha, boolean isRegion) {
         for (Tile t : tiles) {
-            boolean rainbow = isRegion && ColorUtils.isRainbowGroup(t.group);
+            boolean rainbow = ColorUtils.isRainbowGroup(t.group);
             if (rainbow) {
                 int[] hues = new int[7];
                 for (int i = 0; i < hues.length; i++) hues[i] = Color.HSVToColor(new float[]{i * 50f, 0.8f, 0.95f});
@@ -132,70 +101,51 @@ public class ColorWheelView extends View {
                         hues, null, Shader.TileMode.CLAMP));
             }
             fill.setColor(t.color);
-            fill.setAlpha(alpha);
             canvas.drawRoundRect(t.rect, dp(8), dp(8), fill);
             fill.setShader(null);
-            fill.setAlpha(255);
 
-            float cw = t.rect.width(), ch = t.rect.height();
-            if (isRegion) {
-                int textColor = rainbow ? 0xFFFFFFFF : textColorFor(t.color);
-                // Name at the top, a few representative icons in the middle, count at the bottom.
-                textPaint.setColor(textColor);
-                textPaint.setAlpha(alpha);
-                textPaint.setTextSize(Math.min(dp(20), ch * 0.16f));
-                canvas.drawText(t.label, t.rect.centerX(), t.rect.top + ch * 0.24f, textPaint);
+            int textColor = rainbow ? 0xFFFFFFFF : textColorFor(t.color);
+            float pad = dp(10);
+            // Small, corner-aligned color name.
+            textPaint.setColor(textColor);
+            textPaint.setTextSize(dp(13));
+            canvas.drawText(t.name, t.rect.left + pad, t.rect.top + pad + dp(11), textPaint);
 
-                if (t.samples != null && !t.samples.isEmpty()) {
-                    int ns = Math.min(t.samples.size(), cw > dp(150) ? 4 : 3);
-                    float isz = Math.min(dp(40), (cw - dp(16)) / ns - dp(6));
-                    isz = Math.max(isz, dp(20));
-                    float spacing = isz + dp(6);
-                    float startX = t.rect.centerX() - (ns - 1) * spacing / 2f;
-                    float iy = t.rect.centerY() + dp(4);
-                    for (int s = 0; s < ns; s++) {
-                        Drawable d = t.samples.get(s).getIcon();
-                        float ix = startX + s * spacing;
-                        d.setBounds((int) (ix - isz / 2), (int) (iy - isz / 2),
-                                (int) (ix + isz / 2), (int) (iy + isz / 2));
-                        d.setAlpha(alpha);
-                        d.draw(canvas);
-                        d.setAlpha(255);
-                    }
-                }
-
-                textPaint.setColor(textColor);
-                textPaint.setAlpha(alpha);
-                textPaint.setTextSize(Math.min(dp(13), ch * 0.1f));
-                canvas.drawText(t.count + (t.count == 1 ? " app" : " apps"),
-                        t.rect.centerX(), t.rect.bottom - ch * 0.1f, textPaint);
-                textPaint.setAlpha(255);
-            } else if (t.app != null) {
-                boolean showLabel = ch > dp(72) && cw > dp(62);
-                float iconSize = Math.min(Math.min(cw, ch) * (showLabel ? 0.5f : 0.62f), dp(72));
-                float ccx = t.rect.centerX(), ccy = t.rect.centerY() - (showLabel ? dp(8) : 0);
-                Drawable d = t.app.getIcon();
-                d.setBounds((int) (ccx - iconSize / 2), (int) (ccy - iconSize / 2),
-                        (int) (ccx + iconSize / 2), (int) (ccy + iconSize / 2));
-                d.setAlpha(alpha);
-                d.draw(canvas);
-                d.setAlpha(255);
-                if (showLabel) {
-                    textPaint.setColor(textColorFor(t.color));
-                    textPaint.setAlpha(alpha);
-                    textPaint.setTextSize(dp(11));
-                    canvas.drawText(ellipsize(t.app.getLabel(), textPaint, cw - dp(8)),
-                            ccx, ccy + iconSize / 2 + dp(15), textPaint);
-                    textPaint.setAlpha(255);
-                }
-            }
+            drawRegionIcons(canvas, t, t.rect.top + pad + dp(20));
         }
     }
 
-    // --- layout ---
+    /** Fills the tile below the name with as many app icons as fit. */
+    private void drawRegionIcons(Canvas canvas, Tile t, float top) {
+        float pad = dp(10), gap = dp(5);
+        float left = t.rect.left + pad, right = t.rect.right - pad, bottom = t.rect.bottom - pad;
+        float w = right - left, h = bottom - top;
+        if (w <= 0 || h <= 0) return;
+        int n = t.apps.size();
 
-    private void layoutRegions(int w, int h) {
-        regionTiles.clear();
+        float[] candidates = {dp(46), dp(40), dp(34), dp(30), dp(26), dp(22), dp(18)};
+        float icon = candidates[candidates.length - 1];
+        int cols = 1, rows = 1;
+        for (float s : candidates) {
+            int c = Math.max(1, (int) ((w + gap) / (s + gap)));
+            int r = Math.max(1, (int) ((h + gap) / (s + gap)));
+            if (c * r >= n) { icon = s; cols = c; rows = r; break; }
+            icon = s; cols = c; rows = r; // keep smallest if nothing fits all
+        }
+        int show = Math.min(n, cols * rows);
+        for (int i = 0; i < show; i++) {
+            int r = i / cols, c = i % cols;
+            float ix = left + c * (icon + gap) + icon / 2;
+            float iy = top + r * (icon + gap) + icon / 2;
+            Drawable d = t.apps.get(i).getIcon();
+            d.setBounds((int) (ix - icon / 2), (int) (iy - icon / 2),
+                    (int) (ix + icon / 2), (int) (iy + icon / 2));
+            d.draw(canvas);
+        }
+    }
+
+    private void layout(int w, int h) {
+        tiles.clear();
         int n = groupApps.size();
         if (n == 0) return;
         float[] aspects = new float[n];
@@ -207,30 +157,8 @@ public class ColorWheelView extends View {
         List<RectF> rects = justifyFill(aspects, w, h);
         for (int i = 0; i < rects.size(); i++) {
             int g = groupIds.get(i);
-            List<AppInfo> group = new ArrayList<>(groupApps.get(i));
-            Collections.sort(group, (a, b) -> Long.compare(b.getUsageScore(), a.getUsageScore()));
-            List<AppInfo> samples = new ArrayList<>(group.subList(0, Math.min(4, group.size())));
-            regionTiles.add(new Tile(rects.get(i), ColorUtils.colorGroupAccent(g), null, g,
-                    ColorUtils.colorGroupName(g), groupApps.get(i).size(), samples));
-        }
-    }
-
-    private void layoutApps(int w, int h) {
-        appTiles.clear();
-        if (selectedGroup < 0 || selectedGroup >= groupApps.size()) return;
-        List<AppInfo> list = groupApps.get(selectedGroup);
-        int n = list.size();
-        long usageMax = 0;
-        for (AppInfo a : list) usageMax = Math.max(usageMax, a.getUsageScore());
-        float[] aspects = new float[n];
-        for (int i = 0; i < n; i++) {
-            float pop = usageMax > 0 ? (float) (list.get(i).getUsageScore() / (double) usageMax) : 0.4f;
-            aspects[i] = 0.85f + 0.9f * (float) Math.sqrt(pop);
-        }
-        List<RectF> rects = justifyFill(aspects, w, h);
-        for (int i = 0; i < rects.size(); i++) {
-            AppInfo a = list.get(i);
-            appTiles.add(new Tile(rects.get(i), tileColor(a), a, -1, a.getLabel(), 0, null));
+            tiles.add(new Tile(rects.get(i), ColorUtils.colorGroupAccent(g), g,
+                    ColorUtils.colorGroupName(g), groupApps.get(i)));
         }
     }
 
@@ -244,7 +172,7 @@ public class ColorWheelView extends View {
         float sumAr = 0;
         for (float a : aspects) sumAr += a;
         float targetH = (float) Math.sqrt(availW * availH / Math.max(1f, sumAr));
-        targetH = Math.max(dp(60), Math.min(availH, targetH));
+        targetH = Math.max(dp(80), Math.min(availH, targetH));
 
         float y = pad;
         int i = 0;
@@ -254,8 +182,7 @@ public class ColorWheelView extends View {
             for (int j = i; j < n; j++) {
                 rowSum += aspects[j];
                 rowEnd = j;
-                float projectedH = (availW - gap * (j - i)) / rowSum;
-                if (projectedH <= targetH) break;
+                if ((availW - gap * (j - i)) / rowSum <= targetH) break;
             }
             int count = rowEnd - i + 1;
             float rowH = (availW - gap * (count - 1)) / rowSum;
@@ -269,27 +196,12 @@ public class ColorWheelView extends View {
             y += rowH + gap;
             i = rowEnd + 1;
         }
-
-        // Scale row heights so the mosaic fills to the bottom (no dead space).
         float usedH = (y - gap) - pad;
         if (usedH > pad && usedH < availH) {
             float scale = availH / usedH;
-            for (RectF r : out) {
-                r.top = pad + (r.top - pad) * scale;
-                r.bottom = pad + (r.bottom - pad) * scale;
-            }
+            for (RectF r : out) { r.top = pad + (r.top - pad) * scale; r.bottom = pad + (r.bottom - pad) * scale; }
         }
         return out;
-    }
-
-    private int tileColor(AppInfo app) {
-        float[] hsv = new float[3];
-        Color.colorToHSV(app.getDominantColor(), hsv);
-        if (hsv[1] >= 0.12f) {
-            hsv[1] = Math.min(1f, hsv[1] * 1.15f + 0.05f);
-            hsv[2] = Math.max(0.35f, hsv[2] * 0.92f);
-        }
-        return Color.HSVToColor(hsv);
     }
 
     private int textColorFor(int bg) {
@@ -300,50 +212,19 @@ public class ColorWheelView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        regionTiles.clear();
-        appTiles.clear();
+        tiles.clear();
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() != MotionEvent.ACTION_UP) return true;
         float x = event.getX(), y = event.getY();
-
-        if (progress > 0.5f) {
-            for (Tile t : appTiles) {
-                if (t.rect.contains(x, y) && t.app != null) {
-                    if (listener != null) listener.onAppClick(t.app);
-                    return true;
-                }
-            }
-            animateTo(0f); // tap empty -> back to regions
-            return true;
-        }
-
-        for (int i = 0; i < regionTiles.size(); i++) {
-            if (regionTiles.get(i).rect.contains(x, y)) {
-                selectedGroup = i;
-                layoutApps(getWidth(), getHeight());
-                animateTo(1f);
+        for (Tile t : tiles) {
+            if (t.rect.contains(x, y)) {
+                if (listener != null) listener.onRegionClick(t.group, t.name, t.color, t.apps);
                 return true;
             }
         }
         return true;
-    }
-
-    private void animateTo(float target) {
-        if (animator != null) animator.cancel();
-        animator = ValueAnimator.ofFloat(progress, target);
-        animator.setDuration(220);
-        animator.setInterpolator(new DecelerateInterpolator());
-        animator.addUpdateListener(a -> { progress = (float) a.getAnimatedValue(); invalidate(); });
-        animator.start();
-    }
-
-    private String ellipsize(String s, Paint p, float maxWidth) {
-        if (p.measureText(s) <= maxWidth) return s;
-        String ell = "…";
-        while (s.length() > 1 && p.measureText(s + ell) > maxWidth) s = s.substring(0, s.length() - 1);
-        return s + ell;
     }
 }
