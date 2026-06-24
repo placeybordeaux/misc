@@ -14,6 +14,9 @@ public class AppInfo {
     private final float brightness;
     private final int dominantColor;
 
+    /** Foreground-usage score (e.g. total ms in foreground over the lookback window). 0 if unknown. */
+    private long usageScore;
+
     public AppInfo(String label, String packageName, Drawable icon,
                    float hue, float saturation, float brightness, int dominantColor) {
         this.label = label;
@@ -32,4 +35,6 @@ public class AppInfo {
     public float getSaturation() { return saturation; }
     public float getBrightness() { return brightness; }
     public int getDominantColor() { return dominantColor; }
+    public long getUsageScore() { return usageScore; }
+    public void setUsageScore(long usageScore) { this.usageScore = usageScore; }
 }

@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Loads all launchable apps, extracts their dominant icon color,
@@ -44,6 +45,9 @@ public class AppLoader {
         List<ResolveInfo> resolveInfos = pm.queryIntentActivities(intent, 0);
         List<AppInfo> apps = new ArrayList<>();
 
+        // Per-app foreground usage (empty without Usage Access; used by the Usage mode).
+        Map<String, Long> usage = UsageStatsHelper.queryUsageScores(context);
+
         for (ResolveInfo ri : resolveInfos) {
             String label = ri.loadLabel(pm).toString();
             String packageName = ri.activityInfo.packageName;
@@ -52,8 +56,11 @@ public class AppLoader {
             int dominantColor = ColorUtils.extractDominantColor(icon);
             float[] hsb = ColorUtils.toHSB(dominantColor);
 
-            apps.add(new AppInfo(label, packageName, icon,
-                    hsb[0], hsb[1], hsb[2], dominantColor));
+            AppInfo info = new AppInfo(label, packageName, icon,
+                    hsb[0], hsb[1], hsb[2], dominantColor);
+            Long score = usage.get(packageName);
+            if (score != null) info.setUsageScore(score);
+            apps.add(info);
         }
 
         // Sort by color group first, then by hue within group, then by label
@@ -69,5 +76,34 @@ public class AppLoader {
         });
 
         return apps;
+    }
+
+    /**
+     * A copy of {@code apps} ordered by raw hue (continuous rainbow), achromatic colors last.
+     * Used by the color-wheel mode.
+     */
+    public static List<AppInfo> sortedByHue(List<AppInfo> apps) {
+        List<AppInfo> out = new ArrayList<>(apps);
+        Collections.sort(out, (a, b) -> {
+            boolean grayA = a.getSaturation() < 0.15f;
+            boolean grayB = b.getSaturation() < 0.15f;
+            if (grayA != grayB) return grayA ? 1 : -1; // chromatic first
+            return Float.compare(a.getHue(), b.getHue());
+        });
+        return out;
+    }
+
+    /**
+     * A copy of {@code apps} ordered by usage, most-used first. Apps with no usage data fall to the
+     * end ordered alphabetically, so the list is stable even without Usage Access.
+     */
+    public static List<AppInfo> sortedByUsage(List<AppInfo> apps) {
+        List<AppInfo> out = new ArrayList<>(apps);
+        Collections.sort(out, (a, b) -> {
+            int cmp = Long.compare(b.getUsageScore(), a.getUsageScore());
+            if (cmp != 0) return cmp;
+            return a.getLabel().compareToIgnoreCase(b.getLabel());
+        });
+        return out;
     }
 }

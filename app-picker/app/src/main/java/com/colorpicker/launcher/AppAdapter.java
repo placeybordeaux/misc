@@ -35,6 +35,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private List<AppInfo> currentApps = new ArrayList<>();
     private boolean showHeaders = true;
+    private boolean rainbowBehind = false;
 
     public void setApps(List<AppInfo> apps) {
         currentApps = new ArrayList<>(apps);
@@ -50,6 +51,14 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public boolean getShowHeaders() {
         return showHeaders;
+    }
+
+    /** When true, each icon sits on a vivid hue-tinted glow instead of a subtle tint. */
+    public void setRainbowBehind(boolean rainbow) {
+        if (rainbowBehind != rainbow) {
+            rainbowBehind = rainbow;
+            notifyDataSetChanged();
+        }
     }
 
     private void rebuildItems() {
@@ -111,11 +120,24 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             avh.icon.setImageDrawable(app.getIcon());
             avh.label.setText(app.getLabel());
 
-            // Subtle tinted background based on dominant color
-            GradientDrawable bg = new GradientDrawable();
-            bg.setCornerRadius(24f);
-            bg.setColor(withAlpha(app.getDominantColor(), 30));
-            avh.itemView.setBackground(bg);
+            if (rainbowBehind) {
+                // Vivid hue-saturated glow: a radial gradient from a full-saturation
+                // version of the icon's hue out to transparent, for a rainbow bleed.
+                int glow = vividHue(app.getHue(), app.getSaturation());
+                GradientDrawable bg = new GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
+                        new int[]{withAlpha(glow, 170), withAlpha(glow, 60), withAlpha(glow, 0)});
+                bg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+                bg.setGradientRadius(110f);
+                bg.setCornerRadius(28f);
+                avh.itemView.setBackground(bg);
+            } else {
+                // Subtle tinted background based on dominant color
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(24f);
+                bg.setColor(withAlpha(app.getDominantColor(), 30));
+                avh.itemView.setBackground(bg);
+            }
 
             avh.itemView.setOnClickListener(v -> {
                 Intent launch = context.getPackageManager()
@@ -137,6 +159,17 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private int withAlpha(int color, int alpha) {
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    /**
+     * A vivid version of the icon's hue for the rainbow-behind glow. Chromatic icons get a
+     * full-saturation color of their hue; near-gray icons stay neutral so the rainbow reads cleanly.
+     */
+    private int vividHue(float hue, float saturation) {
+        if (saturation < 0.15f) {
+            return Color.HSVToColor(new float[]{0f, 0f, 0.6f}); // neutral gray glow
+        }
+        return Color.HSVToColor(new float[]{hue, 0.9f, 1f});
     }
 
     // --- View Holders ---

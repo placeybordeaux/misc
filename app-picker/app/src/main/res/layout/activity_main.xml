@@ -34,9 +34,34 @@
             android:src="@drawable/ic_view_list"
             android:tint="#AAAAAA"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Toggle view mode" />
+            android:contentDescription="Toggle headers" />
+
+        <ImageView
+            android:id="@+id/mode_switch"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_mode_switch"
+            android:tint="#BB86FC"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Switch layout mode" />
 
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/usage_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:background="#2A2438"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textColor="#D7C9FF"
+        android:textSize="13sp"
+        android:text="Tap to grant Usage access so apps can sort by how much you use them" />
 
     <ProgressBar
         android:id="@+id/progress"
@@ -46,12 +71,10 @@
         android:layout_marginTop="48dp"
         android:indeterminateTint="#BB86FC" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/app_grid"
+    <FrameLayout
+        android:id="@+id/content_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:padding="8dp"
         android:visibility="gone" />
 
 </LinearLayout>
