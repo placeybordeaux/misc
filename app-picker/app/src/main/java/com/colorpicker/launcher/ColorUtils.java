@@ -36,10 +36,13 @@ public class ColorUtils {
     }
 
     /**
-     * True if the icon contains several distinct vivid hues — i.e. it's a multi-color "rainbow"
-     * logo (Google, Slack, Photos…) rather than a single-color or white-background icon. Detected by
-     * binning saturated pixels into 12 hue buckets and checking that at least 3 buckets are
-     * meaningfully populated.
+     * True if the icon is a multi-color "rainbow" logo (Google, Slack, Photos…) rather than a
+     * single-color, two-tone, or gradient icon.
+     *
+     * <p>Saturated pixels are binned into 12 hues. We count <i>separated</i> hue clusters rather
+     * than populated bins: a gradient (Firefox) or two-tone logo (Alaska) spreads across adjacent
+     * bins and forms only one or two clusters, while a true rainbow has 3+ well-separated color
+     * clusters around the wheel.
      */
     public static boolean isMulticolor(Drawable drawable) {
         Bitmap bitmap = drawableToBitmap(drawable, 48, 48);
@@ -59,10 +62,27 @@ public class ColorUtils {
                 saturated++;
             }
         }
-        if (saturated < px.length * 0.06f) return false; // mostly white/mono
-        int significant = 0;
-        for (int b : bins) if (b >= saturated * 0.10f) significant++;
-        return significant >= 3;
+        if (saturated < px.length * 0.08f) return false; // not enough colored area
+
+        // If one hue dominates the colored area it's really that color (e.g. a red logo with a
+        // small multi-color glyph), not a rainbow.
+        int maxBin = 0;
+        for (int b : bins) maxBin = Math.max(maxBin, b);
+        if (maxBin > saturated * 0.5f) return false;
+
+        // Mark bins that hold a meaningful share, then count circular runs of marked bins.
+        boolean[] sig = new boolean[12];
+        int sigCount = 0;
+        for (int i = 0; i < 12; i++) {
+            if (bins[i] >= saturated * 0.09f) { sig[i] = true; sigCount++; }
+        }
+        if (sigCount < 3 || sigCount == 12) return false;
+
+        int clusters = 0;
+        for (int i = 0; i < 12; i++) {
+            if (sig[i] && !sig[(i + 11) % 12]) clusters++; // start of a run (ring-aware)
+        }
+        return clusters >= 3;
     }
 
     /** Color group for an app, accounting for multi-color "rainbow" icons. */
