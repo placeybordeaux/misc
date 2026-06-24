@@ -27,9 +27,20 @@
             android:fontFamily="sans-serif-medium" />
 
         <ImageView
+            android:id="@+id/settings_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_settings"
+            android:tint="#AAAAAA"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Settings" />
+
+        <ImageView
             android:id="@+id/toggle_view"
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:layout_marginStart="4dp"
             android:padding="8dp"
             android:src="@drawable/ic_view_list"
             android:tint="#AAAAAA"

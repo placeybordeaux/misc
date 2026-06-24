@@ -67,8 +67,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (showHeaders) {
             int currentGroup = -1;
             for (AppInfo app : currentApps) {
-                int group = ColorUtils.colorGroupIndex(
-                        app.getHue(), app.getSaturation(), app.getBrightness());
+                int group = ColorUtils.colorGroupIndex(app);
                 if (group != currentGroup) {
                     currentGroup = group;
                     items.add(new HeaderItem(
@@ -121,15 +120,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             avh.label.setText(app.getLabel());
 
             if (rainbowBehind) {
-                // Vivid hue-saturated glow: a radial gradient from a full-saturation
-                // version of the icon's hue out to transparent, for a rainbow bleed.
-                int glow = vividHue(app.getHue(), app.getSaturation());
-                GradientDrawable bg = new GradientDrawable(
-                        GradientDrawable.Orientation.TOP_BOTTOM,
-                        new int[]{withAlpha(glow, 170), withAlpha(glow, 60), withAlpha(glow, 0)});
-                bg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-                bg.setGradientRadius(110f);
+                // Over the rainbow background, give each icon a soft dark backing for legibility.
+                GradientDrawable bg = new GradientDrawable();
                 bg.setCornerRadius(28f);
+                bg.setColor(0x66000000);
                 avh.itemView.setBackground(bg);
             } else {
                 // Subtle tinted background based on dominant color
@@ -147,6 +141,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 }
             });
         }
+    }
+
+    /** Accent color of the item's color group at this position (for the rainbow background). */
+    public int groupAccentAt(int position) {
+        if (position < 0 || position >= items.size()) return Color.DKGRAY;
+        Object o = items.get(position);
+        if (o instanceof HeaderItem) return ((HeaderItem) o).color;
+        AppInfo a = (AppInfo) o;
+        return ColorUtils.colorGroupAccent(ColorUtils.colorGroupIndex(a));
     }
 
     /**

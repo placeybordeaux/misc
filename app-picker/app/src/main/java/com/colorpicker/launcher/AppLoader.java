@@ -48,16 +48,19 @@ public class AppLoader {
         // Per-app foreground usage (empty without Usage Access; used by the Usage mode).
         Map<String, Long> usage = UsageStatsHelper.queryUsageScores(context);
 
+        ColorUtils.ColorSource colorSource = Settings.getColorSource(context);
+
         for (ResolveInfo ri : resolveInfos) {
             String label = ri.loadLabel(pm).toString();
             String packageName = ri.activityInfo.packageName;
             Drawable icon = ri.loadIcon(pm);
 
-            int dominantColor = ColorUtils.extractDominantColor(icon);
+            int dominantColor = ColorUtils.extractColor(icon, colorSource);
             float[] hsb = ColorUtils.toHSB(dominantColor);
 
             AppInfo info = new AppInfo(label, packageName, icon,
                     hsb[0], hsb[1], hsb[2], dominantColor);
+            info.setMulticolor(ColorUtils.isMulticolor(icon));
             Long score = usage.get(packageName);
             if (score != null) info.setUsageScore(score);
             apps.add(info);
@@ -65,8 +68,8 @@ public class AppLoader {
 
         // Sort by color group first, then by hue within group, then by label
         Collections.sort(apps, (a, b) -> {
-            int groupA = ColorUtils.colorGroupIndex(a.getHue(), a.getSaturation(), a.getBrightness());
-            int groupB = ColorUtils.colorGroupIndex(b.getHue(), b.getSaturation(), b.getBrightness());
+            int groupA = ColorUtils.colorGroupIndex(a);
+            int groupB = ColorUtils.colorGroupIndex(b);
             if (groupA != groupB) return Integer.compare(groupA, groupB);
 
             int hueCmp = Float.compare(a.getHue(), b.getHue());
