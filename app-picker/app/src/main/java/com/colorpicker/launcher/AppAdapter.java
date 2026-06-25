@@ -3,6 +3,9 @@ package com.colorpicker.launcher;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
+import android.provider.Settings;
+import android.widget.PopupMenu;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
@@ -140,6 +143,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     context.startActivity(launch);
                 }
             });
+
+            avh.itemView.setOnLongClickListener(v -> {
+                showAppMenu(v, app);
+                return true;
+            });
         }
     }
 
@@ -158,6 +166,26 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     public boolean isHeader(int position) {
         return position >= 0 && position < items.size()
                 && items.get(position) instanceof HeaderItem;
+    }
+
+    /** Standard launcher long-press actions: open App info or uninstall. */
+    private void showAppMenu(android.view.View anchor, AppInfo app) {
+        PopupMenu menu = new PopupMenu(context, anchor);
+        menu.getMenu().add(0, 1, 0, "App info");
+        menu.getMenu().add(0, 2, 1, "Uninstall");
+        Uri pkg = Uri.parse("package:" + app.getPackageName());
+        menu.setOnMenuItemClickListener(item -> {
+            Intent intent;
+            if (item.getItemId() == 1) {
+                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg);
+            } else {
+                intent = new Intent(Intent.ACTION_DELETE, pkg);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        });
+        menu.show();
     }
 
     private int withAlpha(int color, int alpha) {

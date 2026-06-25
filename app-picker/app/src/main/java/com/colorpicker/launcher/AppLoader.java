@@ -50,21 +50,48 @@ public class AppLoader {
 
         ColorUtils.ColorSource colorSource = Settings.getColorSource(context);
 
+        // Color analysis is the expensive part, so cache it per package. The cache is wiped when the
+        // color-source strategy changes; per-package entries are dropped on install/update/removal.
+        android.content.SharedPreferences cache = ColorCache.prefs(context);
+        boolean sourceChanged = cache.getInt(ColorCache.KEY_SOURCE, -1) != colorSource.ordinal();
+        android.content.SharedPreferences.Editor editor = cache.edit();
+        if (sourceChanged) {
+            editor.clear();
+            editor.putInt(ColorCache.KEY_SOURCE, colorSource.ordinal());
+        }
+
         for (ResolveInfo ri : resolveInfos) {
             String label = ri.loadLabel(pm).toString();
             String packageName = ri.activityInfo.packageName;
             Drawable icon = ri.loadIcon(pm);
 
-            int dominantColor = ColorUtils.extractColor(icon, colorSource);
-            float[] hsb = ColorUtils.toHSB(dominantColor);
+            int dominantColor;
+            float[] hsb;
+            boolean multicolor;
+
+            String cached = sourceChanged ? null : cache.getString(packageName, null);
+            String[] parts = cached == null ? null : cached.split("\\|");
+            if (parts != null && parts.length == 5) {
+                dominantColor = Integer.parseInt(parts[0]);
+                hsb = new float[]{Float.parseFloat(parts[1]), Float.parseFloat(parts[2]),
+                        Float.parseFloat(parts[3])};
+                multicolor = "1".equals(parts[4]);
+            } else {
+                dominantColor = ColorUtils.extractColor(icon, colorSource);
+                hsb = ColorUtils.toHSB(dominantColor);
+                multicolor = ColorUtils.isMulticolor(icon);
+                editor.putString(packageName,
+                        ColorCache.encode(dominantColor, hsb[0], hsb[1], hsb[2], multicolor));
+            }
 
             AppInfo info = new AppInfo(label, packageName, icon,
                     hsb[0], hsb[1], hsb[2], dominantColor);
-            info.setMulticolor(ColorUtils.isMulticolor(icon));
+            info.setMulticolor(multicolor);
             Long score = usage.get(packageName);
             if (score != null) info.setUsageScore(score);
             apps.add(info);
         }
+        editor.apply();
 
         // Sort by color group first, then by hue within group, then by label
         Collections.sort(apps, (a, b) -> {

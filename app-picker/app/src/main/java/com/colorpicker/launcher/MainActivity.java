@@ -1,7 +1,9 @@
 package com.colorpicker.launcher;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
@@ -50,6 +52,18 @@ public class MainActivity extends AppCompatActivity {
     private Mode mode = Mode.GROUPED;
     private boolean showHeaders = true;
     @Nullable private View colorListOverlay; // the per-color scrollable list, when open
+    private boolean firstResume = true;
+
+    /** Reloads (dropping the changed app's cached color) when apps are installed/updated/removed. */
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            if (intent.getData() != null) {
+                ColorCache.removePackage(ctx, intent.getData().getSchemeSpecificPart());
+            }
+            loadApps();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +98,14 @@ public class MainActivity extends AppCompatActivity {
         usageBanner.setOnClickListener(v ->
                 startActivity(UsageStatsHelper.usageAccessSettingsIntent()));
 
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        filter.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        filter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        filter.addDataScheme("package");
+        registerReceiver(packageReceiver, filter);
+
         searchBox.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
@@ -100,7 +122,25 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        loadApps();
+        // The initial load happens in onCreate; the package receiver keeps data fresh. Only reload
+        // here if Usage Access changed (e.g. the user just granted it from Settings).
+        boolean ua = UsageStatsHelper.hasAccess(this);
+        if (firstResume) { firstResume = false; return; }
+        if (ua != hasUsageAccess) loadApps();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try { unregisterReceiver(packageReceiver); } catch (IllegalArgumentException ignored) {}
+    }
+
+    /** Pressing Home while already here: reset to a clean top-level view. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (colorListOverlay != null) closeColorList();
+        if (!query.isEmpty()) searchBox.setText("");
     }
 
     @Override
