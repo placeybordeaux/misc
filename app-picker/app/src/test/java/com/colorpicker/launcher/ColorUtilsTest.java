@@ -265,4 +265,52 @@ public class ColorUtilsTest {
                     0, accent);
         }
     }
+
+    // --- Per-package group overrides (reported mis-categorizations) ---
+    // Each app below was landing in the wrong color group; the override forces the right one.
+    // The stored hue/saturation in these AppInfos is deliberately the *wrong* group so the test
+    // proves the override wins over normal classification.
+
+    private static AppInfo appWith(String pkg, float hue, float sat, float bri) {
+        return new AppInfo("label", pkg, null, hue, sat, bri, Color.HSVToColor(new float[]{hue, sat, bri}));
+    }
+
+    @Test
+    public void googleMaps_overriddenToRainbow() {
+        // Maps' multi-color pin should read as Rainbow even though one hue can dominate.
+        AppInfo maps = appWith("com.google.android.apps.maps", 220f, 0.8f, 0.7f); // would be Blue
+        assertEquals(ColorUtils.GROUP_RAINBOW, ColorUtils.colorGroupIndex(maps));
+        assertEquals("Rainbow", ColorUtils.colorGroupName(ColorUtils.colorGroupIndex(maps)));
+    }
+
+    @Test
+    public void gmail_overriddenToRainbow() {
+        // Gmail's red/blue/yellow/green "M" on white should be Rainbow, not White.
+        AppInfo gmail = appWith("com.google.android.gm", 0f, 0.0f, 0.95f); // would be White
+        assertEquals(ColorUtils.GROUP_RAINBOW, ColorUtils.colorGroupIndex(gmail));
+    }
+
+    @Test
+    public void claude_overriddenToOrange() {
+        // Claude's coral sits at ~14° and falls into Red by hue; it should be Orange.
+        AppInfo claude = appWith("com.anthropic.claude", 14f, 0.6f, 0.85f); // would be Red
+        assertEquals(ColorUtils.GROUP_ORANGE, ColorUtils.colorGroupIndex(claude));
+        assertEquals("Orange", ColorUtils.colorGroupName(ColorUtils.colorGroupIndex(claude)));
+    }
+
+    @Test
+    public void balatro_overriddenToRed() {
+        // Balatro reads as Blue from its averaged color but feels Red.
+        AppInfo balatro = appWith("com.playstack.balatro.android", 220f, 0.8f, 0.5f); // would be Blue
+        assertEquals(ColorUtils.GROUP_RED, ColorUtils.colorGroupIndex(balatro));
+        assertEquals("Red", ColorUtils.colorGroupName(ColorUtils.colorGroupIndex(balatro)));
+    }
+
+    @Test
+    public void nonOverriddenApp_classifiedNormally() {
+        // A package with no override falls back to hue-based classification.
+        AppInfo blueApp = appWith("com.example.unknown", 220f, 0.8f, 0.7f);
+        assertEquals("Blue", ColorUtils.colorGroupName(ColorUtils.colorGroupIndex(blueApp)));
+        assertNull(ColorUtils.groupOverride("com.example.unknown"));
+    }
 }

@@ -14,8 +14,28 @@ import androidx.palette.graphics.Palette;
 public class ColorUtils {
 
     public static final int COLOR_GROUP_COUNT = 13;
+    public static final int GROUP_RED = 1;
+    public static final int GROUP_ORANGE = 2;
     /** Icons with several distinct vivid hues (Google, Slack, …) — "rainbow", not white. */
     public static final int GROUP_RAINBOW = 12;
+
+    /**
+     * Hand-tuned group overrides for icons the automatic classifier reads wrong (multi-color logos
+     * the heuristic misses, or whose averaged color lands in the neighbouring group). Keyed by
+     * package name; see {@code ColorUtilsTest} for the cases this pins down.
+     */
+    private static final java.util.Map<String, Integer> GROUP_OVERRIDES = new java.util.HashMap<>();
+    static {
+        GROUP_OVERRIDES.put("com.google.android.apps.maps", GROUP_RAINBOW); // multi-color pin
+        GROUP_OVERRIDES.put("com.google.android.gm", GROUP_RAINBOW);        // Gmail "M"
+        GROUP_OVERRIDES.put("com.anthropic.claude", GROUP_ORANGE);          // coral reads as red
+        GROUP_OVERRIDES.put("com.playstack.balatro.android", GROUP_RED);    // reads as blue
+    }
+
+    /** The forced group for a package, or {@code null} if it should be classified normally. */
+    public static Integer groupOverride(String packageName) {
+        return GROUP_OVERRIDES.get(packageName);
+    }
 
     /**
      * How an app's single representative colour is chosen from its icon. The strategies differ in
@@ -87,6 +107,8 @@ public class ColorUtils {
 
     /** Color group for an app, accounting for multi-color "rainbow" icons. */
     public static int colorGroupIndex(AppInfo app) {
+        Integer override = GROUP_OVERRIDES.get(app.getPackageName());
+        if (override != null) return override;
         if (app.isMulticolor()) return GROUP_RAINBOW;
         return colorGroupIndex(app.getHue(), app.getSaturation(), app.getBrightness());
     }

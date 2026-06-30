@@ -11,30 +11,32 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="20dp"
-        android:paddingEnd="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="10dp"
         android:paddingTop="40dp"
-        android:paddingBottom="12dp">
+        android:paddingBottom="8dp">
 
-        <TextView
-            android:id="@+id/title"
+        <EditText
+            android:id="@+id/search_box"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Apps"
+            android:background="@drawable/bg_search"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:hint="Search apps"
+            android:textColorHint="#888888"
             android:textColor="#FFFFFF"
-            android:textSize="28sp"
-            android:fontFamily="sans-serif-medium" />
-
-        <ImageView
-            android:id="@+id/settings_button"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:padding="8dp"
-            android:src="@drawable/ic_settings"
-            android:tint="#AAAAAA"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Settings" />
+            android:textSize="15sp"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:drawablePadding="10dp"
+            android:autofillHints="" />
 
         <ImageView
             android:id="@+id/toggle_view"
@@ -48,10 +50,21 @@
             android:contentDescription="Toggle headers" />
 
         <ImageView
+            android:id="@+id/settings_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_settings"
+            android:tint="#AAAAAA"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Settings" />
+
+        <ImageView
             android:id="@+id/mode_switch"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="2dp"
             android:padding="8dp"
             android:src="@drawable/ic_mode_switch"
             android:tint="#BB86FC"
@@ -59,30 +72,6 @@
             android:contentDescription="Switch layout mode" />
 
     </LinearLayout>
-
-    <EditText
-        android:id="@+id/search_box"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/bg_search"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:hint="Search apps"
-        android:textColorHint="#888888"
-        android:textColor="#FFFFFF"
-        android:textSize="15sp"
-        android:inputType="text"
-        android:imeOptions="actionSearch"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:drawableStart="@android:drawable/ic_menu_search"
-        android:drawablePadding="10dp"
-        android:autofillHints="" />
 
     <TextView
         android:id="@+id/usage_banner"

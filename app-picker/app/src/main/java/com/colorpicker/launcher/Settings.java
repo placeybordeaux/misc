@@ -8,6 +8,10 @@ public final class Settings {
 
     private static final String PREFS = "color_picker_prefs";
     private static final String KEY_COLOR_SOURCE = "color_source";
+    private static final String KEY_ENABLED_MODES = "enabled_modes";
+
+    /** Default mode bitmask: Rainbow (ordinal 1) + Wheel (ordinal 2) enabled, Grouped/Usage off. */
+    public static final int DEFAULT_ENABLED_MASK = (1 << 1) | (1 << 2);
 
     private Settings() {}
 
@@ -24,6 +28,20 @@ public final class Settings {
 
     public static void setColorSource(Context c, ColorUtils.ColorSource source) {
         prefs(c).edit().putInt(KEY_COLOR_SOURCE, source.ordinal()).apply();
+    }
+
+    /** Bitmask of which layout modes are enabled (bit i = mode ordinal i). Never zero. */
+    public static int getEnabledModesMask(Context c) {
+        int mask = prefs(c).getInt(KEY_ENABLED_MODES, DEFAULT_ENABLED_MASK);
+        return mask == 0 ? DEFAULT_ENABLED_MASK : mask;
+    }
+
+    public static void setEnabledModesMask(Context c, int mask) {
+        prefs(c).edit().putInt(KEY_ENABLED_MODES, mask == 0 ? DEFAULT_ENABLED_MASK : mask).apply();
+    }
+
+    public static boolean isModeEnabled(Context c, int ordinal) {
+        return (getEnabledModesMask(c) & (1 << ordinal)) != 0;
     }
 
     /** Human-readable labels for the color-source picker. */

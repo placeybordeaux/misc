@@ -35,12 +35,14 @@ public class MainActivity extends AppCompatActivity {
     /** The experimental layouts the mode-switch button cycles through. */
     private enum Mode { GROUPED, RAINBOW, WHEEL, USAGE }
 
+    /** Labels for the "Enabled views" settings picker; index matches Mode ordinal. */
+    private static final String[] MODE_LABELS = {"Apps (grouped)", "Rainbow", "Wheel", "Usage"};
+
     private FrameLayout contentContainer;
     private ProgressBar progress;
     private ImageView toggleView;
     private ImageView modeSwitch;
     private ImageView settingsButton;
-    private TextView title;
     private TextView usageBanner;
     private EditText searchBox;
 
@@ -75,16 +77,16 @@ public class MainActivity extends AppCompatActivity {
         toggleView = findViewById(R.id.toggle_view);
         modeSwitch = findViewById(R.id.mode_switch);
         settingsButton = findViewById(R.id.settings_button);
-        title = findViewById(R.id.title);
         usageBanner = findViewById(R.id.usage_banner);
         searchBox = findViewById(R.id.search_box);
 
-        settingsButton.setOnClickListener(v -> showColorSourceDialog());
+        settingsButton.setOnClickListener(v -> showSettingsDialog());
 
-        mode = Mode.values()[getPrefs().getInt(KEY_MODE, 0)];
+        mode = Mode.values()[getPrefs().getInt(KEY_MODE, Mode.RAINBOW.ordinal())];
+        if (!isEnabled(mode)) mode = firstEnabledMode();
 
         modeSwitch.setOnClickListener(v -> {
-            mode = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
+            mode = nextEnabledMode(mode);
             getPrefs().edit().putInt(KEY_MODE, mode.ordinal()).apply();
             renderMode();
         });
@@ -155,6 +157,17 @@ public class MainActivity extends AppCompatActivity {
         return getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
+    /** Top-level settings chooser: pick which views are enabled or how colors are extracted. */
+    private void showSettingsDialog() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Settings")
+                .setItems(new String[]{"Enabled views", "Color source"}, (dialog, which) -> {
+                    if (which == 0) showEnabledViewsDialog();
+                    else showColorSourceDialog();
+                })
+                .show();
+    }
+
     private void showColorSourceDialog() {
         ColorUtils.ColorSource[] sources = ColorUtils.ColorSource.values();
         int current = Settings.getColorSource(this).ordinal();
@@ -167,6 +180,49 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /** Multi-select of which layout modes the switch button cycles through (min one). */
+    private void showEnabledViewsDialog() {
+        Mode[] modes = Mode.values();
+        boolean[] checked = new boolean[modes.length];
+        for (int i = 0; i < modes.length; i++) checked[i] = isEnabled(modes[i]);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Enabled views")
+                .setMultiChoiceItems(MODE_LABELS, checked,
+                        (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("Save", (dialog, w) -> {
+                    int mask = 0;
+                    for (int i = 0; i < modes.length; i++) if (checked[i]) mask |= (1 << i);
+                    if (mask == 0) mask = Settings.DEFAULT_ENABLED_MASK; // never disable everything
+                    Settings.setEnabledModesMask(this, mask);
+                    if (!isEnabled(mode)) {
+                        mode = firstEnabledMode();
+                        getPrefs().edit().putInt(KEY_MODE, mode.ordinal()).apply();
+                    }
+                    renderMode();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private boolean isEnabled(Mode m) {
+        return Settings.isModeEnabled(this, m.ordinal());
+    }
+
+    private Mode firstEnabledMode() {
+        for (Mode m : Mode.values()) if (isEnabled(m)) return m;
+        return Mode.RAINBOW;
+    }
+
+    private Mode nextEnabledMode(Mode from) {
+        Mode[] vals = Mode.values();
+        for (int i = 1; i <= vals.length; i++) {
+            Mode candidate = vals[(from.ordinal() + i) % vals.length];
+            if (isEnabled(candidate)) return candidate;
+        }
+        return from; // only one enabled
     }
 
     private void loadApps() {
@@ -206,21 +262,28 @@ public class MainActivity extends AppCompatActivity {
         boolean listMode = mode == Mode.GROUPED || mode == Mode.RAINBOW;
         toggleView.setVisibility(listMode && !searching ? View.VISIBLE : View.GONE);
         updateToggleIcon();
+        // The switch button only matters when more than one view is enabled.
+        modeSwitch.setVisibility(enabledModeCount() > 1 ? View.VISIBLE : View.GONE);
         usageBanner.setVisibility(
                 mode == Mode.USAGE && !hasUsageAccess && !searching ? View.VISIBLE : View.GONE);
 
         if (searching) {
-            title.setText(apps.size() + (apps.size() == 1 ? " result" : " results"));
             contentContainer.addView(buildAppGrid(apps, false));
             return;
         }
 
         switch (mode) {
-            case GROUPED:  title.setText("Apps");    renderGrid(false); break;
-            case RAINBOW:  title.setText("Rainbow"); renderGrid(true);  break;
-            case WHEEL:    title.setText("Wheel");   renderWheel();      break;
-            case USAGE:    title.setText("Usage");   renderUsage();      break;
+            case GROUPED:  renderGrid(false); break;
+            case RAINBOW:  renderGrid(true);  break;
+            case WHEEL:    renderWheel();      break;
+            case USAGE:    renderUsage();      break;
         }
+    }
+
+    private int enabledModeCount() {
+        int n = 0;
+        for (Mode m : Mode.values()) if (isEnabled(m)) n++;
+        return n;
     }
 
     /** A plain scrollable 4-column grid of apps (flat, no headers). */
