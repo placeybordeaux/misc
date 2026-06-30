@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rainbow stripes centered in the 72dp adaptive-icon safe zone (18..90). -->
+    <path android:fillColor="#E53935" android:pathData="M36,32 h36 a4,4 0 0 1 4,4 v0 h-44 v0 a4,4 0 0 1 4,-4 z" />
+    <path android:fillColor="#FB8C00" android:pathData="M32,40 h44 v8 h-44 z" />
+    <path android:fillColor="#FDD835" android:pathData="M32,48 h44 v8 h-44 z" />
+    <path android:fillColor="#43A047" android:pathData="M32,56 h44 v8 h-44 z" />
+    <path android:fillColor="#1E88E5" android:pathData="M32,64 h44 v8 h-44 z" />
+    <path android:fillColor="#8E24AA" android:pathData="M32,72 h44 v0 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v0 z" />
+</vector>

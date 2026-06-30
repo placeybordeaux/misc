@@ -1,0 +1,17 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+
+# Nix
+result
+result-*
+
+# direnv
+.direnv/
+
+# OS
+.DS_Store
