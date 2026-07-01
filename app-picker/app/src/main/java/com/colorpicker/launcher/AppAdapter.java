@@ -119,7 +119,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         } else {
             AppInfo app = (AppInfo) items.get(position);
             AppViewHolder avh = (AppViewHolder) holder;
-            avh.icon.setImageDrawable(app.getIcon());
+            avh.icon.setImageDrawable(app.newIconDrawable());
             avh.label.setText(app.getLabel());
 
             if (rainbowBehind) {
