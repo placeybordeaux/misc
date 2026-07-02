@@ -49,7 +49,9 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [ jdk gradle androidSdk ];
+            # fdroidserver drives the self-hosted F-Droid repo (`fdroid update`);
+            # gettext provides envsubst for rendering the F-Droid config template.
+            packages = [ jdk gradle androidSdk pkgs.fdroidserver pkgs.gettext ];
 
             JAVA_HOME = "${jdk}";
             ANDROID_HOME = sdkRoot;

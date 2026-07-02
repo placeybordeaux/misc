@@ -1,0 +1,20 @@
+# Template for the fdroidserver config. CI renders this into config.yml at build
+# time with `envsubst`, filling the ${...} values from GitHub Actions secrets, then
+# DELETES the rendered config.yml before publishing (it contains keystore passwords).
+#
+# The keystore itself is written to a path OUTSIDE the published tree, so no key
+# material or password is ever deployed to GitHub Pages.
+repo_url: https://placeybordeaux.github.io/misc/fdroid/repo
+repo_name: Color App Picker
+repo_description: >-
+  Personal F-Droid repository for the Color App Picker launcher.
+  Add this repo in the F-Droid client to get automatic updates.
+
+# Index-signing key (the F-Droid REPO key — distinct from the APK signing key).
+keystore: ${FDROID_KEYSTORE_FILE}
+repo_keyalias: ${FDROID_KEY_ALIAS}
+keystorepass: ${FDROID_KEYSTORE_PASSWORD}
+keypass: ${FDROID_KEY_PASSWORD}
+
+# Keep every published version available (no archive repo).
+archive_older: 0

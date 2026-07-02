@@ -1,30 +1,55 @@
 name: app-picker Release
 
-# Build a release APK and publish a GitHub Release when a namespaced tag is pushed.
-# Tag format: app-picker-v1.2.3  (namespaced because this is a monorepo).
+# Publish the Color App Picker on a namespaced tag (monorepo):
 #
-#   git tag app-picker-v1.0.0 && git push origin app-picker-v1.0.0
+#   git tag app-picker-v1.2.3 && git push origin app-picker-v1.2.3
 #
-# The APK is UNSIGNED. To ship a signed build, add a keystore + signingConfig in
-# app/build.gradle and wire the secrets noted in the "Sign APK" step below.
+# Pipeline:
+#   build          -> signed release APK (version derived from the tag) + GitHub Release
+#   publish-fdroid -> add the APK to the self-hosted F-Droid repo and deploy to GitHub Pages
+#                     (served at https://placeybordeaux.github.io/misc/fdroid/repo)
+#
+# Required repository secrets:
+#   APK signing (you generate & hold this key):
+#     APP_KEYSTORE_BASE64      base64 of the app signing keystore (.jks/.p12)
+#     APP_KEYSTORE_PASSWORD    keystore password
+#     APP_KEY_ALIAS            key alias
+#     APP_KEY_PASSWORD         key password
+#   F-Droid index signing (separate repo key you generate & hold):
+#     FDROID_KEYSTORE_BASE64   base64 of the F-Droid index-signing keystore (.p12)
+#     FDROID_KEYSTORE_PASSWORD keystore password
+#     FDROID_KEY_ALIAS         key alias
+#     FDROID_KEY_PASSWORD      key password
 
 on:
   push:
     tags:
       - 'app-picker-v*'
 
-defaults:
-  run:
-    working-directory: app-picker
-
 permissions:
-  contents: write  # required to create the GitHub Release
+  contents: write  # create the GitHub Release and push the gh-pages branch
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-picker
+    outputs:
+      version_name: ${{ steps.version.outputs.name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          # app-picker-v1.2.3 -> name=1.2.3, code=1*1000000 + 2*1000 + 3
+          raw="${GITHUB_REF_NAME#app-picker-v}"
+          IFS='.' read -r major minor patch <<< "$raw"
+          code=$(( ${major:-0} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} ))
+          echo "name=$raw" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Version $raw (code $code)"
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v16
@@ -45,26 +70,41 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('app-picker/**/*.gradle', 'app-picker/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Build release APK
-        run: nix develop --command ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Decode signing keystore
+        env:
+          APP_KEYSTORE_BASE64: ${{ secrets.APP_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$APP_KEYSTORE_BASE64" ]; then
+            echo "::error::APP_KEYSTORE_BASE64 secret is not set — cannot build a signed release."
+            exit 1
+          fi
+          echo "$APP_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/app.keystore"
 
-      # --- Signing (optional) -------------------------------------------------
-      # Once you add a signingConfig in app/build.gradle reading these env vars,
-      # uncomment to produce a signed, store-ready APK:
-      #
-      #   env:
-      #     KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      #     KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      # ------------------------------------------------------------------------
+      - name: Build signed release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/app.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.APP_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.APP_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.APP_KEY_PASSWORD }}
+        run: |
+          nix develop --command ./gradlew assembleRelease --no-daemon --stacktrace \
+            -PappVersionName=${{ steps.version.outputs.name }} \
+            -PappVersionCode=${{ steps.version.outputs.code }}
 
       - name: Locate APK
         id: apk
         run: |
-          path=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
-          echo "Found APK: $path"
+          path=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -1)
+          [ -n "$path" ] || { echo "::error::No signed APK found"; exit 1; }
+          echo "Found $path"
           echo "path=app-picker/$path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -72,3 +112,82 @@ jobs:
           files: ${{ steps.apk.outputs.path }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  publish-fdroid:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (repo + fdroid metadata/config)
+        uses: actions/checkout@v4
+
+      # Existing published site → carries old APK versions forward so the repo
+      # accumulates releases instead of replacing them. Absent on the first run.
+      - name: Fetch current gh-pages site
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: prev
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('app-picker/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release-apk
+          path: apk
+
+      - name: Assemble F-Droid repo working tree
+        env:
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_KEYSTORE_FILE: ${{ runner.temp }}/fdroid.p12
+          FDROID_KEYSTORE_PASSWORD: ${{ secrets.FDROID_KEYSTORE_PASSWORD }}
+          FDROID_KEY_ALIAS: ${{ secrets.FDROID_KEY_ALIAS }}
+          FDROID_KEY_PASSWORD: ${{ secrets.FDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::FDROID_KEYSTORE_BASE64 secret is not set — cannot sign the F-Droid index."
+            exit 1
+          fi
+
+          # Repo (index) signing key — written outside the published tree.
+          echo "$FDROID_KEYSTORE_BASE64" | base64 -d > "$FDROID_KEYSTORE_FILE"
+
+          mkdir -p site/fdroid/repo
+          # Metadata is version-controlled on master; config is rendered from the template.
+          cp -r app-picker/fdroid/metadata site/fdroid/metadata
+          envsubst < app-picker/fdroid/config.template.yml > site/fdroid/config.yml
+          chmod 600 site/fdroid/config.yml
+
+          # Carry forward previously published APKs, then add the new one.
+          if [ -d prev/fdroid/repo ]; then
+            find prev/fdroid/repo -maxdepth 1 -name '*.apk' -exec cp {} site/fdroid/repo/ \;
+          fi
+          cp apk/*.apk site/fdroid/repo/
+
+      - name: Update F-Droid index
+        run: nix develop ./app-picker --command bash -c 'cd site/fdroid && fdroid update --pretty'
+
+      - name: Strip secrets from publish tree
+        run: |
+          # config.yml holds keystore passwords — must never be deployed.
+          rm -f site/fdroid/config.yml
+          # Optional landing page so the Pages root isn't blank.
+          printf '<meta http-equiv="refresh" content="0; url=fdroid/repo/">\n' > site/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true
