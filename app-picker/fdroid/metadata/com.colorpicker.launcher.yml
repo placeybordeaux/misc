@@ -1,0 +1,18 @@
+# F-Droid metadata for the Color App Picker launcher.
+# This is the source of truth for how the app appears in the repo; edit it here.
+# `fdroid update` in CI merges this with the facts read from the signed APK.
+Categories:
+  - System
+Name: Color App Picker
+Summary: A color-sorted app launcher
+Description: |-
+  Color App Picker is a home-screen launcher that arranges your installed apps by
+  the dominant colour of their icons, laid out as a colour wheel you can search and
+  scroll.
+
+  Add this repo to the F-Droid client to receive updates automatically.
+AuthorName: Peter Lacey-Bordeaux
+SourceCode: https://github.com/placeybordeaux/misc/tree/master/app-picker
+IssueTracker: https://github.com/placeybordeaux/misc/issues
+# TODO: set the app's real license (SPDX id, e.g. MIT / Apache-2.0 / GPL-3.0-only).
+# License: Unlicense

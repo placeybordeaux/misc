@@ -2,6 +2,17 @@ plugins {
     id 'com.android.application'
 }
 
+// Version is injected by CI from the release tag (app-picker-vX.Y.Z); the fallbacks
+// keep local/dev builds working. F-Droid and Play both require versionCode to
+// increase on every published build.
+def appVersionCode = (project.findProperty('appVersionCode') ?: '1').toString().toInteger()
+def appVersionName = (project.findProperty('appVersionName') ?: '1.0').toString()
+
+// Release signing is driven entirely by environment variables so no key material
+// lives in the repo. When they're absent (local dev), the release build is left
+// unsigned rather than failing.
+def hasReleaseSigning = System.getenv('KEYSTORE_PASSWORD') != null
+
 android {
     namespace 'com.colorpicker.launcher'
     compileSdk 34
@@ -10,8 +21,8 @@ android {
         applicationId "com.colorpicker.launcher"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -21,10 +32,24 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(System.getenv('KEYSTORE_FILE') ?: "${rootProject.projectDir}/release.keystore")
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
