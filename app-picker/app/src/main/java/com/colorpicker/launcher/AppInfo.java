@@ -34,6 +34,20 @@ public class AppInfo {
     public String getLabel() { return label; }
     public String getPackageName() { return packageName; }
     public Drawable getIcon() { return icon; }
+
+    /**
+     * A fresh, independent copy of the icon for handing to an {@link android.widget.ImageView}.
+     *
+     * <p>The base {@link #icon} instance is shared with the canvas-drawing views (the color wheel
+     * and the usage field), which mutate its bounds on every frame via {@code setBounds}. Handing
+     * that same instance to an ImageView lets those mutations shrink/blank the displayed icon (e.g.
+     * when the wheel redraws after the launcher resumes). A copy shares the underlying bitmap through
+     * the {@link Drawable.ConstantState} but keeps its own bounds, so it renders independently.
+     */
+    public Drawable newIconDrawable() {
+        Drawable.ConstantState state = icon == null ? null : icon.getConstantState();
+        return state != null ? state.newDrawable() : icon;
+    }
     public float getHue() { return hue; }
     public float getSaturation() { return saturation; }
     public float getBrightness() { return brightness; }
